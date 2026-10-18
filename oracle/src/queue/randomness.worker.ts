@@ -14,6 +14,7 @@ import { MultiOracleCoordinatorService } from '../multi-oracle/multi-oracle-coor
 import { PriorityClassifierService } from './priority-classifier.service';
 import { AuditLogService } from '../audit/audit-log.service';
 import { AlertingService } from '../health/alerting.service';
+import { OracleConfigService } from '../config/oracle-config.service';
 import {
   Processor,
   Process,
@@ -25,15 +26,18 @@ import {
 import { Job, Queue } from 'bull';
 import { RANDOMNESS_QUEUE, RandomnessJobPayload } from './randomness.queue';
 import { Injectable, Logger, OnApplicationShutdown, Optional } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { MetricsService } from '../metrics/metrics.service';
 
 const DLQ_DEPTH_ALERT_DEDUP_KEY = 'dlq-depth-threshold';
+
+/** Alert dedup key for PRNG draws above the review threshold. */
+const PRNG_REVIEW_ALERT_DEDUP_KEY = 'prng-above-review-threshold';
 
 @Processor(RANDOMNESS_QUEUE)
 @Injectable()
 export class RandomnessWorker implements OnApplicationShutdown {
   private readonly vrfThresholdXlm: number;
+  private readonly prngReviewThresholdXlm: number;
   private readonly dlqDepthAlertThreshold: number;
   private readonly processedRequestIds = new Set<string>();
   private highPriorityJobStartTimes = new Map<string, number>();
@@ -53,13 +57,16 @@ export class RandomnessWorker implements OnApplicationShutdown {
     private readonly lagMonitor: LagMonitorService,
     private readonly oracleRegistry: OracleRegistryService,
     private readonly multiOracleCoordinator: MultiOracleCoordinatorService,
+    private readonly oracleConfigService: OracleConfigService,
     private readonly configService: ConfigService,
     private readonly auditLogService: AuditLogService,
     private readonly alertingService: AlertingService,
     @Optional() private readonly metricsService?: MetricsService,
     @Optional() @InjectQueue(RANDOMNESS_QUEUE) private readonly randomnessQueue?: Queue,
   ) {
-    this.vrfThresholdXlm = Number(this.configService.get<string>('VRF_THRESHOLD_XLM', '500'));
+    const vrfConfig = this.oracleConfigService.getVrf();
+    this.vrfThresholdXlm = vrfConfig.thresholdXlm;
+    this.prngReviewThresholdXlm = vrfConfig.prngReviewThresholdXlm;
     this.dlqDepthAlertThreshold = Number(
       this.configService.get<string>('DLQ_DEPTH_ALERT_THRESHOLD', '5'),
     );
@@ -269,7 +276,23 @@ export class RandomnessWorker implements OnApplicationShutdown {
         timestamp: new Date(),
         requestId,
         feeStroops: result.feePaid != null && result.feePaid > 0 ? result.feePaid : null,
+        method,
       });
+
+      if (method === RandomnessMethod.PRNG && finalPrizeAmount >= this.prngReviewThresholdXlm) {
+        this.alertingService.fire({
+          severity: 'warning',
+          summary: `PRNG draw for raffle ${raffleId} exceeds review threshold (${finalPrizeAmount} XLM >= ${this.prngReviewThresholdXlm} XLM)`,
+          details: `Draw used deterministic PRNG instead of VRF. Prize amount ${finalPrizeAmount} XLM is above the review threshold of ${this.prngReviewThresholdXlm} XLM.`,
+          dedupKey: `prng-review-${raffleId}`,
+          context: {
+            oracle_id: process.env.LOCAL_ORACLE_ID || 'oracle-001',
+            raffle_id: raffleId,
+            prize_amount_xlm: finalPrizeAmount,
+            method: 'PRNG',
+          },
+        });
+      }
 
       this.processedRequestIds.add(requestId);
 
@@ -370,7 +393,23 @@ export class RandomnessWorker implements OnApplicationShutdown {
         timestamp: new Date(),
         requestId,
         feeStroops: result.feePaid != null && result.feePaid > 0 ? result.feePaid : null,
+        method,
       });
+
+      if (method === RandomnessMethod.PRNG && finalPrizeAmount >= this.prngReviewThresholdXlm) {
+        this.alertingService.fire({
+          severity: 'warning',
+          summary: `PRNG draw for raffle ${raffleId} exceeds review threshold (${finalPrizeAmount} XLM >= ${this.prngReviewThresholdXlm} XLM)`,
+          details: `Draw used deterministic PRNG instead of VRF. Prize amount ${finalPrizeAmount} XLM is above the review threshold of ${this.prngReviewThresholdXlm} XLM.`,
+          dedupKey: `prng-review-${raffleId}`,
+          context: {
+            oracle_id: process.env.LOCAL_ORACLE_ID || 'oracle-001',
+            raffle_id: raffleId,
+            prize_amount_xlm: finalPrizeAmount,
+            method: 'PRNG',
+          },
+        });
+      }
 
       this.processedRequestIds.add(requestId);
 

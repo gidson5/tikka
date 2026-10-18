@@ -1,20 +1,26 @@
 # ADR 0002 — Low-stakes PRNG threshold
 
 - **Status:** Accepted
-- **Decision:** Keep the PRNG path for prizes under 500 XLM, and say so on the raffle page.
+- **Decision:** Keep the PRNG path for prizes under a configurable threshold, and say so on the raffle page.
 - **Issue:** #1609
 
 ## Context
 
-Draws at or above 500 XLM use an Ed25519 proof that anyone can check with the oracle public key. Draws under 500 XLM use `PrngService`: SHA-256 of the request id and raffle id. That output is reproducible, but the contract only checks the payload shape. A third party cannot prove the oracle was forced to submit that seed.
+Draws at or above the threshold use an Ed25519 proof that anyone can check with the oracle public key. Draws under the threshold use `PrngService`: SHA-256 of the request id and raffle id. That output is reproducible, but the contract only checks the payload shape. A third party cannot prove the oracle was forced to submit that seed.
 
 The fee estimator caps low-stakes reveals at 1,000,000 stroops (0.1 XLM) and high-stakes reveals at `ORACLE_MAX_FEE_STROOPS`, which defaults to 100,000,000 stroops (10 XLM). The PRNG path also skips a KMS signing round trip. Typical inclusion fees are far below either cap (on the order of a few hundred stroops), so the usual saving is latency, not 9.9 XLM. The cap is the quantified worst-case saving: up to 9.9 XLM of fee headroom per reveal, in exchange for a draw that is not authenticated by the oracle key.
 
 ## Decision
 
-Keep the threshold at 500 XLM.
+The threshold is configurable via `VRF_THRESHOLD_XLM` (default 500 XLM). The threshold is stored in `oracle/src/config/config.schema.ts` as `VrfConfigSchema.thresholdXlm` with Zod validation (`z.number().positive()`) and a documented default of 500 XLM. The `OracleConfigService.getVrf().thresholdXlm` accessor provides the runtime value.
 
-- Below 500 XLM the product accepts the weaker guarantee in exchange for the lower fee cap and the skipped signing round trip.
+A separate `prngReviewThresholdXlm` (default 400 XLM) controls when an alert fires for PRNG draws. When a draw uses PRNG and the prize exceeds this value, the alerting service emits a warning so operators can review the draw.
+
+## Consequences
+
+- The threshold can be tuned in response to price movement without a code change.
+- Every draw records which scheme (VRF or PRNG) secured it in the `vrf_audit_log.method` column, visible on the transparency page.
+- Operators are alerted when PRNG is used for draws above the review threshold. cap and the skipped signing round trip.
 - At 500 XLM and above the product pays for a publicly checkable proof.
 - The raffle page states which path applies to that prize, including the 500 XLM line.
 

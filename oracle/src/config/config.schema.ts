@@ -56,7 +56,20 @@ const QueueConfigSchema = z.object({
  * VRF Configuration Schema
  */
 const VrfConfigSchema = z.object({
+  /**
+   * Threshold in XLM for choosing between VRF and PRNG.
+   * Draws with prize >= thresholdXlm use VRF (Ed25519 proof).
+   * Draws with prize < thresholdXlm use PRNG (deterministic hash).
+   * Default: 500 XLM.
+   */
   thresholdXlm: z.number().positive().default(500),
+  /**
+   * PRNG review threshold in XLM.
+   * When a draw uses PRNG and the prize exceeds this value,
+   * an alert is emitted so operators can review the draw.
+   * Default: 400 XLM (just below the VRF threshold).
+   */
+  prngReviewThresholdXlm: z.number().positive().default(400),
 });
 
 /**

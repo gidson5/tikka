@@ -20,6 +20,12 @@ export interface VrfAuditRecord {
    * null or 0 means the fee was not recorded (historical rows hardcoded 0).
    */
   fee_stroops?: number | null;
+  /**
+   * Randomness scheme used for this draw.
+   * 'VRF' = Ed25519 verifiable random function (high-stakes).
+   * 'PRNG' = deterministic hash-based PRNG (low-stakes).
+   */
+  method: 'VRF' | 'PRNG';
 }
 
 export interface CreateCommitParams {
@@ -50,6 +56,8 @@ export interface RecordSubmissionParams {
   requestId?: string;
   /** Observed inclusion fee. Omit or null when the chain did not report one. */
   feeStroops?: number | null;
+  /** Randomness scheme used: VRF or PRNG. Defaults to VRF if not specified. */
+  method?: 'VRF' | 'PRNG';
 }
 
 /**

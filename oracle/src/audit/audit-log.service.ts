@@ -142,6 +142,7 @@ export class AuditLogService {
             status: 'revealed',
             chain_hash: chainHash,
             fee_stroops: recordedFeeStroops(params.feeStroops),
+            method: params.method ?? 'VRF',
           })
           .eq('raffle_id', params.raffleId);
 
@@ -180,6 +181,7 @@ export class AuditLogService {
           seed: '',
           chain_hash: chainHash,
           fee_stroops: recordedFeeStroops(params.feeStroops),
+          method: params.method ?? 'VRF',
         });
 
         if (error) {

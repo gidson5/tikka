@@ -9,7 +9,7 @@ import { PrngService } from '../randomness/prng.service';
 import { TxSubmitterService } from '../submitter/tx-submitter.service';
 import { HealthService } from '../health/health.service';
 import { LagMonitorService } from '../health/lag-monitor.service';
-import { ConfigService } from '@nestjs/config';
+import { OracleConfigService } from '../config/oracle-config.service';
 
 export interface ProcessingResult {
   success: boolean;
@@ -37,11 +37,9 @@ export class RandomnessProcessorService {
     private readonly txSubmitter: TxSubmitterService,
     private readonly healthService: HealthService,
     private readonly lagMonitor: LagMonitorService,
-    private readonly configService: ConfigService,
+    private readonly oracleConfigService: OracleConfigService,
   ) {
-    this.vrfThresholdXlm = Number(
-      this.configService.get<string>('VRF_THRESHOLD_XLM', '500'),
-    );
+    this.vrfThresholdXlm = this.oracleConfigService.getVrf().thresholdXlm;
   }
 
   /**

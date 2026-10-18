@@ -1,5 +1,4 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConfigService } from '@nestjs/config';
 import { RandomnessProcessorService } from './randomness-processor.service';
 import { JobStateManager } from './job-state-manager';
 import { JobState } from './job-state.types';
@@ -11,6 +10,7 @@ import { TxSubmitterService } from '../submitter/tx-submitter.service';
 import { HealthService } from '../health/health.service';
 import { LagMonitorService } from '../health/lag-monitor.service';
 import { OracleLoggerService } from '../logger/oracle-logger';
+import { OracleConfigService } from '../config/oracle-config.service';
 
 describe('RandomnessProcessorService', () => {
   let processor: RandomnessProcessorService;
@@ -21,6 +21,7 @@ describe('RandomnessProcessorService', () => {
   let txSubmitter: jest.Mocked<TxSubmitterService>;
   let healthService: jest.Mocked<HealthService>;
   let lagMonitor: jest.Mocked<LagMonitorService>;
+  let oracleConfigService: jest.Mocked<OracleConfigService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -86,12 +87,10 @@ describe('RandomnessProcessorService', () => {
           },
         },
         {
-          provide: ConfigService,
+          provide: OracleConfigService,
           useValue: {
-            get: jest.fn().mockImplementation((key: string, defaultValue?: string) => {
-              if (key === 'VRF_THRESHOLD_XLM') return '500';
-              return defaultValue;
-            }),
+            getVrf: jest.fn().mockReturnValue({ thresholdXlm: 500, prngReviewThresholdXlm: 400 }),
+            getConfig: jest.fn().mockReturnValue({}),
           },
         },
       ],
@@ -105,6 +104,7 @@ describe('RandomnessProcessorService', () => {
     txSubmitter = module.get(TxSubmitterService) as jest.Mocked<TxSubmitterService>;
     healthService = module.get(HealthService) as jest.Mocked<HealthService>;
     lagMonitor = module.get(LagMonitorService) as jest.Mocked<LagMonitorService>;
+    oracleConfigService = module.get(OracleConfigService) as jest.Mocked<OracleConfigService>;
   });
 
   describe('Test 1: Transient Generation Failure', () => {
